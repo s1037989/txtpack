@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>txtpack job <%= param 'id' %></title>
+  <script>
+    const ws = new WebSocket('<%= url_for('status_txtpack_ws', {id => param 'id'})->to_abs->scheme('https') %>');
+    ws.onmessage = function (event) { console.log(event.data); document.body.innerHTML = event.data };
+    ws.onclose  = function (event) { console.log("done"); document.body.innerHTML += "<i>Job finished; Connection intentionally closed</i>" };
+  </script>
+</head>
+<body>
+%= content
+</body>
+</html>

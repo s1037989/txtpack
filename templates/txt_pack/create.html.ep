@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>txtpack</title>
+</head>
+<body>
+  <h1>txtpack</h1>
+  <form method="post" action="/pack">
+    <label for="modules">Modules (one per line)</label><br>
+    <textarea id="modules" name="modules" rows="12" cols="60" required></textarea><br>
+    <button type="submit">Install and pack</button>
+  </form>
+  <p>The finished script is written to <code>public/txtpack-$jobid</code> and available for download from <code>/txtpack-$jobid</code>.</p>
+  <p>Jobs are processed by a Minion worker. Start one with <code>./txtpack.pl minion worker</code>.</p>
+</body>
+</html>

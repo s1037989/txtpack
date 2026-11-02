@@ -1,0 +1,17 @@
+<h1>txtpack job <%= $id %></h1>
+<p>State: <strong><%= $state %></strong></p>
+% if ($state eq 'finished') {
+  <p><%= link_to "Download txtpack-$id.txt" => {id => $id} %></p>
+% }
+<h2>Summary</h2>
+<p><%== $summary || "Waiting for job $id to finish..." %></p>
+<h2>Modules</h2>
+% my ($perl, @modules) = @{$info->{args}};
+<pre><%= sprintf "perl: %s\nmodules: %s", $perl, join ' ', @modules %></pre>
+<h2>Status</h2>
+<pre><%= $info->{notes}{status} ? join "\n", @{$info->{notes}{status}} : '' %></pre>
+<h2>Installed</h2>
+<pre><%= $info->{notes}{installed} ? join "\n", @{$info->{notes}{installed}} : '' %></pre>
+<h2>Result</h2>
+<pre><%= dumper $info->{result} || {} %></pre>
+<p><%= link_to 'Start another job' => '/' %></p>

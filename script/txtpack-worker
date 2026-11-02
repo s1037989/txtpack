@@ -1,0 +1,24 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use Mojo::File qw(curfile);
+use lib curfile->dirname->sibling('lib')->to_string;
+use Mojo::Server;
+
+my $server = Mojo::Server->new->build_app('TxtPack::Application::Worker');
+my $worker = $server->app->minion->worker;
+my $status = $worker->status;
+
+my $log = $server->app->log->context('script='.curfile->basename, 'application='.ref $server);
+$log->info("Worker $$ started");
+$worker->on(dequeue => sub { pop->once(spawn => \&_spawn) });
+$worker->run;
+$log->info("Worker $$ stopped");
+
+sub _spawn {
+  my ($job, $pid)  = @_;
+  my ($id,  $task) = ($job->id, $job->task);
+  $job->app->log->debug(qq{Process $pid is performing job "$id" with task "$task"});
+}
