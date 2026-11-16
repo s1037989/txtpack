@@ -214,7 +214,7 @@ sub add_text_file {
   my $part = Mojo::Content::Single->new;
   $part->headers->content_type($text ? 'text/plain' : 'application/octet');
   $part->headers->content_disposition(qq{attachment; filename="$name"});
-  $part->asset->add_chunk($text ? $content : '');
+  $part->asset($part->asset->add_chunk($text ? $content : ''));
   push @{$multi->parts}, $part;
 
   return 1;
