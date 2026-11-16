@@ -9,6 +9,7 @@ my ($t, $minion) = TxtPack::Test->new_app('TxtPack::Application::Web');
 
 $t->get_ok('/')
   ->status_is(200)
+  ->element_exists('a[href="/confluence/login"]')
   ->element_exists('form[action="/pack"]')
   ->element_exists('textarea[name="modules"]');
 

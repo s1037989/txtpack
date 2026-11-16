@@ -1,6 +1,7 @@
 package TxtPack::Util;
 use Mojo::Base -strict;
 
+use Archive::Tar;
 use Config;
 use Exporter qw(import);
 use IPC::Run qw(run);
@@ -124,15 +125,23 @@ sub parse_cpanm_build_log {
   my $content = $log->slurp;
   my ($work_dir) = $content =~ /^Work directory is (.+?)\s*$/m;
   $work_dir = trim($work_dir) if defined $work_dir;
+  my @fetching  = map { Mojo::URL->new($_)->path->parts->[-1] } $content =~ /^Fetching (\S+)/mg;
   my @installed = $content =~ /^Successfully installed (\S+)/mg;
 
-  return (\@installed, $work_dir);
+  return (\@fetching, \@installed, $work_dir);
 }
 
 sub build_multipart {
-  my ($work_dir, $installed) = @_;
+  my ($work_dir, $fetching, $installed) = @_;
   die "cpanm did not report a work directory\n" unless defined $work_dir && length $work_dir;
   die "cpanm work directory does not exist: $work_dir\n" unless -d $work_dir;
+  path($work_dir)->list({dir => 1})->grep(sub{-d $_})->each(sub { warn sprintf "Removing %s\n", $_->remove_tree });
+  path($work_dir)->list({dir => 0})->grep(sub{-f $_ && $_->basename ne 'build.log'})->each(sub {
+    my $tar = Archive::Tar->new;
+    warn "Extracting $_ to $work_dir\n";
+    $tar->setcwd($work_dir);
+    $tar->read($_, 1, {extract => 1});
+  });
 
   my $multi = Mojo::Content::MultiPart->new;
   $multi->headers->content_type('multipart/mixed');
@@ -181,7 +190,7 @@ sub collect_dist_files {
         $walk->($child, length $prefix ? "$prefix/$name" : $name);
       }
       elsif (-f $child) {
-        next if $name =~ /\A(?:Makefile(?:\.old)?|MYMETA\.(?:json|yml)|pm_to_blib|MANIFEST\.bak|Build(?:\.bat)?)\z/;
+        # next if $name =~ /\A(?:Makefile(?:\.old)?|MYMETA\.(?:json|yml)|pm_to_blib|MANIFEST\.bak|Build(?:\.bat)?)\z/;
         push @files, [$child, length $prefix ? "$prefix/$name" : $name];
       }
     }
@@ -243,6 +252,8 @@ __DATA__
 @@ self_extracting_multipart.pl
 #!/usr/bin/env perl
 use Mojo::Base -strict, -signatures;
+
+# cpanm -n Mojolicious Exporter::Tiny List::MoreUtils::XS List::MoreUtils
 
 use Archive::Tar;
 use List::MoreUtils qw(firstidx);

@@ -1,5 +1,6 @@
 package Mojo::Log::Role::Context;
 use Mojo::Base -role;
+use overload '""' => sub { shift->to_string }, fallback => 1;
 
 use Mojo::Collection qw(c);
 use Mojo::Util qw(trim);
@@ -11,6 +12,8 @@ sub context {
   unshift @context, @{$self->{context}||=c};
   return $self->new(parent => $self->{parent} || $self, context => \@context, level => $self->level);
 }
+
+sub to_string { shift->history->[-1] }
 
 package Mojo::Log::Context;
 use Mojo::Base -base;

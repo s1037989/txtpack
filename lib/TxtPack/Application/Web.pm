@@ -5,6 +5,8 @@ use Mojo::Base 'TxtPack', -signatures;
 sub startup {
   my $self = shift->SUPER::startup(@_);
 
+  $self->plugin(DigitalOceanAgent => $self->app->config->{agent});
+  $self->plugin(Minion => {Pg => $self->app->pg});
   $self->plugin('Minion::Admin');
   $self->plugin('Perldocs');
   $self->plugin('Status');

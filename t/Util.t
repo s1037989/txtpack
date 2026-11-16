@@ -1,5 +1,6 @@
 use Mojo::Base -strict;
 
+use Archive::Tar;
 use Mojo::Content::MultiPart;
 use Mojo::Content::Single;
 use Mojo::File qw(path tempdir);
@@ -47,30 +48,48 @@ $t->test('is', $quiet_ok, 1, 'runs a command quietly');
 $t->test('is', tail('x' x 4001), 'x' x 4000, 'keeps only the final 4000 characters');
 $t->test('is', tail("first\r\nlast\r\n"), "first\nlast\n", 'normalizes line endings');
 
-my $build_dir = $dir->child('work');
-my $dist_dir  = $build_dir->child('Mojo-Base-1.0')->make_path;
+my $build_dir = $dir->child('work')->make_path;
+my $fetch     = 'Mojo-Base-1.0.tar.gz';
+my $dist      = 'Mojo-Base-1.0';
+my $dist_dir  = $build_dir->child($dist)->make_path;
 $dist_dir->child('README')->spurt("module docs\n");
 $dist_dir->child('Makefile')->spurt("generated\n");
 my $log = $dir->child('build.log');
-$log->spurt("Work directory is $build_dir\nSuccessfully installed Mojo-Base-1.0\n");
-my ($installed, $work_dir) = parse_cpanm_build_log($log);
-$t->test('is_deeply', $installed, ['Mojo-Base-1.0'], 'parses installed distributions');
+$log->spurt("Work directory is $build_dir\nFetching file://$build_dir/$fetch\nSuccessfully installed $dist\n");
+my ($fetching, $installed, $work_dir) = parse_cpanm_build_log($log);
+$t->test('is_deeply', $fetching, [$fetch], 'parses fetched distributions');
+$t->test('is_deeply', $installed, [$dist], 'parses installed distributions');
 $t->test('is', $work_dir, "$build_dir", 'parses the cpanm work directory');
-$t->test('is', "" . find_dist_dir($build_dir, 'Mojo-Base-1.0'), "$dist_dir", 'finds the distribution directory');
+$t->test('is', "" . find_dist_dir($build_dir, $dist), "$dist_dir", 'finds the distribution directory');
 my $files = collect_dist_files($dist_dir);
-$t->test('is_deeply', [map { $_->[1] } @$files], ['README'], 'omits generated build files');
+$t->test('is_deeply', [sort map { $_->[1] } @$files], ['Makefile', 'README'], 'includes generated build files');
 
-my ($multi, $count, $parts, $skipped) = build_multipart($build_dir, $installed);
-$t->test('is', $count, 1, 'adds installable text files to the multipart document');
-$t->test('is_deeply', $parts, ['Mojo-Base-1.0/README'], 'records included file names');
+# build_multipart removes subdirs and extracts non-build.log files from work_dir.
+$dist_dir->remove_tree;
+{
+  my $src = tempdir;
+  my $sdir = $src->child($dist)->make_path;
+  $sdir->child('README')->spurt("module docs\n");
+  $sdir->child('Makefile')->spurt("generated\n");
+  my $cwd = path->to_string;
+  chdir $src->to_string;
+  my $tar = Archive::Tar->new;
+  $tar->add_files($dist, "$dist/README", "$dist/Makefile");
+  $tar->write($build_dir->child($fetch)->to_string, COMPRESS_GZIP);
+  chdir $cwd;
+}
+
+my ($multi, $count, $parts, $skipped) = build_multipart($build_dir, $fetching, $installed);
+$t->test('is', $count, 2, 'adds installable text files to the multipart document');
+$t->test('is_deeply', [sort @$parts], ["$dist/Makefile", "$dist/README"], 'records included file names');
 $t->test('is_deeply', $skipped, [], 'reports no skipped files');
 my $text = multipart_as_text($multi);
-$t->test('like', $text, qr/Mojo-Base-1\.0\/README/, 'serializes multipart content');
+$t->test('like', $text, qr/\Q$dist\E\/README/, 'serializes multipart content');
 $t->test('like', multipart_as_script($multi), qr/__DATA__\n/, 'embeds multipart content in a self-extracting script');
 
 my $single = Mojo::Content::Single->new;
 $single->asset->add_chunk('body');
 my $multipart = Mojo::Content::MultiPart->new(parts => [$single]);
-$t->test('ok', add_text_file($multipart, $dist_dir->child('README'), 'README'), 'adds a text file as a multipart part');
+$t->test('ok', add_text_file($multipart, $build_dir->child("$dist/README"), 'README'), 'adds a text file as a multipart part');
 
 done_testing();

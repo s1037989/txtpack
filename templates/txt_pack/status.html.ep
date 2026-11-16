@@ -1,7 +1,7 @@
 <h1>txtpack job <%= $id %></h1>
 <p>State: <strong><%= $state %></strong></p>
 % if ($state eq 'finished') {
-  <p><%= link_to "Download txtpack-$id.txt" => {id => $id} %></p>
+  <p><%= link_to "Download txtpack-$id.txt" => 'download_txtpack' => {id => $id} %></p>
 % }
 <h2>Summary</h2>
 <p><%== $summary || "Waiting for job $id to finish..." %></p>

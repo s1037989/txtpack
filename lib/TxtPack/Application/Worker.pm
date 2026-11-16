@@ -5,8 +5,8 @@ use Mojo::Base 'TxtPack', -signatures;
 sub startup {
   my $self = shift->SUPER::startup(@_);
   
-  my $minion = $self->app->minion;
-  $minion->add_task(pack_modules => 'TxtPack::Task::TxtPack');
+  $self->plugin(Minion => {Pg => $self->app->pg});
+  $self->app->minion->add_task(pack_modules => 'TxtPack::Task::TxtPack');
 }
 
 1;

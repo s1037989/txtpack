@@ -1,10 +1,11 @@
 package TxtPack::Task::TxtPack;
-use Mojo::Base 'Minion::Job', -signatures;
+use Mojo::Base 'TxtPack::Task', -signatures;
 
 use Mojo::Util qw(decode);
 use TxtPack::Util;
 
-sub run ($self, $perl, @modules) {
+sub run {
+  my ($self, $perl, @modules) = shift->SUPER::run(@_);
   my $guard = $self->minion->guard('txtpack-cpanm', 86_400);
   return $self->retry({delay => 30}) unless $guard;
   $self->note(perl => $perl);
@@ -35,9 +36,9 @@ sub run ($self, $perl, @modules) {
   });
 
   $self->note(status => [$self->info->{notes}{status}->@*, sprintf 'Installing %d modules with cpanm', scalar @modules]);
-  $self->app->log->info(sprintf 'in process %s %s', $$, $pid);
+  $self->log->info(sprintf 'in process %s %s', $$, $pid);
   $subprocess->run_p(sub ($subprocess) {
-    $self->app->log->info(sprintf 'in subprocess %s', $$);
+    $self->log->info(sprintf 'in subprocess %s', $$);
     my $fh;
     my $cmd = sprintf "perlbrew exec --with $target cpanm --notest --self-contained";
     $self->note(status => [$self->info->{notes}{status}->@*, "$cmd ..."]);
@@ -52,23 +53,25 @@ sub run ($self, $perl, @modules) {
     });
     $stream->on(error => sub { warn 'error'; Mojo::IOLoop->remove($stream_id) });
     $stream->on(close => sub {
-      $self->app->log->info("close stream $stream");
+      $self->log->info("close stream $stream");
       $self->note(_pid => undef);
       Mojo::IOLoop->remove($stream);
       Mojo::IOLoop->stop;
     });
     Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
   })->timeout(86_400 => 'timeout')->then(sub {
-    my ($installed, $work_dir) = parse_cpanm_build_log($build_log);
+    my ($fetching, $installed, $work_dir) = parse_cpanm_build_log($build_log);
     $self->note(status => [$self->info->{notes}{status}->@*, 'Build log ' . $build_log . ' file=' . (-f $build_log ? 1 : 0)
         . ' size=' . (-s $build_log // 0) . ' installed=' . scalar(@$installed)]);
+    $self->note(fetching => $fetching);
     $self->note(installed => $installed);
     $self->note(work_dir => $work_dir);
-    return ($installed, $work_dir);
-  })->then(sub ($installed, $work_dir) {
+    return ($fetching, $installed, $work_dir);
+  })->then(sub ($fetching, $installed, $work_dir) {
     $self->note(status => [$self->info->{notes}{status}->@*, 'Found ' . scalar(@$installed) . ' installed distribution(s)']);
-    return build_multipart($work_dir, $installed);
+    return build_multipart($work_dir, $fetching, $installed);
   })->then(sub ($multi, $count, $parts, $skipped) {
+    $self->note(status => [$self->info->{notes}{status}->@*, join "\n  ", 'Skipped', @$skipped]);
     my $public = $app->home->child('public');
     $public->make_path unless -d "$public";
     my $output = $public->child("txtpack-$self->{id}.txt");
@@ -89,7 +92,7 @@ sub run ($self, $perl, @modules) {
   })->wait;
 
   if (my $exit = $subprocess->exit_code) {
-    $self->app->log->error("job fail $exit");
+    $self->log->error("job fail $exit");
   }
 
   Mojo::IOLoop->remove($progress);

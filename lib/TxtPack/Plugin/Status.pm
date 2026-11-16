@@ -3,8 +3,6 @@ use Mojo::Base 'TxtPack::Plugin', -signatures;
 
 use Markdown::Simple;
 
-has trace => 0;
-
 sub register {
   my ($self, $app, $conf) = shift->SUPER::register(@_);
   $self->trace(1) if $conf->{trace};
