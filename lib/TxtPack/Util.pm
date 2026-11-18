@@ -125,10 +125,10 @@ sub parse_cpanm_build_log {
   my $content = $log->slurp;
   my ($work_dir) = $content =~ /^Work directory is (.+?)\s*$/m;
   $work_dir = trim($work_dir) if defined $work_dir;
-  my @fetching  = map { Mojo::URL->new($_)->path->parts->[-1] } $content =~ /^Fetching (\S+)/mg;
+  my $fetching  = c(map { Mojo::URL->new($_)->path->parts->[-1] } $content =~ /^Fetching (\S+)/mg);
   my @installed = $content =~ /^Successfully installed (\S+)/mg;
 
-  return (\@fetching, \@installed, $work_dir);
+  return ($fetching, \@installed, $work_dir);
 }
 
 sub build_multipart {
@@ -136,7 +136,7 @@ sub build_multipart {
   die "cpanm did not report a work directory\n" unless defined $work_dir && length $work_dir;
   die "cpanm work directory does not exist: $work_dir\n" unless -d $work_dir;
   path($work_dir)->list({dir => 1})->grep(sub{-d $_})->each(sub { warn sprintf "Removing %s\n", $_->remove_tree });
-  path($work_dir)->list({dir => 0})->grep(sub{-f $_ && $_->basename ne 'build.log'})->each(sub {
+  $fetching->map(sub{path($work_dir)->child($_)})->grep(sub{-f $_ && $_->basename ne 'build.log'})->each(sub {
     my $tar = Archive::Tar->new;
     warn "Extracting $_ to $work_dir\n";
     $tar->setcwd($work_dir);
@@ -251,12 +251,24 @@ __DATA__
 
 @@ self_extracting_multipart.pl
 #!/usr/bin/env perl
+package List::MoreUtils::PP;
+sub firstidx (&@)
+{
+    my $f = shift;
+    foreach my $i (0 .. $#_)
+    {
+        local *_ = \$_[$i];
+        return $i if $f->();
+    }
+    return -1;
+}
+
+package main;
 use Mojo::Base -strict, -signatures;
 
 # cpanm -n Mojolicious Exporter::Tiny List::MoreUtils::XS List::MoreUtils
 
 use Archive::Tar;
-use List::MoreUtils qw(firstidx);
 use Mojo::Collection qw(c);
 use Mojo::Content::MultiPart;
 use Mojo::Content::Single;
@@ -284,7 +296,7 @@ Mojo::Collection->new(@{$multi->parts})->map(sub ($part) {
 })->tap(sub {
   $order = $_->map(sub{$_->[0]})->uniq->to_array
 })->reduce(sub {
-  my $idx = firstidx { $_ eq $b->[0] } @$order;
+  my $idx = List::MoreUtils::PP::firstidx { $_ eq $b->[0] } @$order;
   $a->[$idx] ||= c;
   push @{$a->[$idx]}, [$b->[1], $b->[2]];
   return $a;
